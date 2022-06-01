@@ -28,7 +28,8 @@ Imports:
     utils,
     DBI (>= 1.0.0),
     urltools,
-    bit64
+    bit64,
+    R6
 Suggests:
     aws.s3,
     R.utils,
@@ -40,11 +41,12 @@ Suggests:
     RSQLite,
     ssh,
     Andromeda (>= 0.6.0),
-    dplyr
+    dplyr,
+    pool
 License: Apache License
 VignetteBuilder: knitr
 URL: https://ohdsi.github.io/DatabaseConnector/, https://github.com/OHDSI/DatabaseConnector
 BugReports: https://github.com/OHDSI/DatabaseConnector/issues
 Copyright: See file COPYRIGHTS
-RoxygenNote: 7.1.2
+RoxygenNote: 7.2.0
 Encoding: UTF-8
