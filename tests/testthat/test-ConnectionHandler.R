@@ -1,46 +1,56 @@
 # Implementations of database connection should function in the same way
-genericTests <- function(connClass, classes, connectionClass) {
-  conn <- connClass$new(connectionDetails)
-  checkmate::expect_class(conn, classes)
+genericTests <- function(HanderClass, classes, connectionClass, connectionDetails, cdmDatabaseSchema) {
+  connectionHandler <- HanderClass$new(connectionDetails)
+  for (cVal in classes) {
+    expect_true(cVal %in% class(connectionHandler))
+  }
 
   on.exit(
     {
-      conn$finalize()
+      connectionHandler$finalize()
     },
     add = TRUE
   )
 
-  checkmate::expect_class(conn, "ConnectionHandler")
-  expect_true(conn$isActive)
-  expect_true(DBI::dbIsValid(dbObj = conn$con))
+  expect_true("ConnectionHandler" %in% class(connectionHandler))
+  expect_true(connectionHandler$isActive)
+  expect_true(DBI::dbIsValid(dbObj = connectionHandler$getConnection()))
 
-  data <- conn$queryDb("SELECT count(*) AS cnt_test FROM main.concept;")
+  data <- connectionHandler$queryDb("SELECT count(*) AS cnt_test FROM @cdm_database_schema.concept;",
+                                    cdm_database_schema = cdmDatabaseSchema)
 
-  checkmate::expect_data_frame(data)
-  expect_equal(data$cntTest, 442)
+  expect_true(is.data.frame(data))
+  connectionHandler$snakeCaseToCamelCase <- FALSE
+  data2 <- connectionHandler$queryDb("SELECT count(*) AS cnt_test FROM @cdm_database_schema.concept;",
+                                     cdm_database_schema = cdmDatabaseSchema)
 
-  data2 <- conn$queryDb("SELECT count(*) AS cnt_test FROM main.concept;", snakeCaseToCamelCase = FALSE)
+  expect_true(is.data.frame(data2))
 
-  checkmate::expect_data_frame(data2)
-  expect_equal(data2$CNT_TEST, 442)
+  expect_error(connectionHandler$queryDb("SELECT 1 * WHERE;"))
 
-  expect_error(conn$queryDb("SELECT 1 * WHERE;"))
+  connectionHandler$closeConnection()
+  expect_false(connectionHandler$isActive)
+  expect_false(DBI::dbIsValid(dbObj = connectionHandler$con))
+  connectionHandler$initConnection()
+  expect_true(connectionHandler$isActive)
 
-  conn$closeConnection()
-  expect_false(conn$isActive)
-  expect_false(DBI::dbIsValid(dbObj = conn$con))
-  conn$initConnection()
-  expect_true(conn$isActive)
+  expect_warning(connectionHandler$initConnection(), "Closing existing connection")
 
-  expect_warning(conn$initConnection(), "Closing existing connection")
-  checkmate::expect_class(conn$getConnection(), connectionClass)
-  conn$closeConnection()
+  connectionHandler$closeConnection()
 }
 
+connectionDetails <- createConnectionDetails(
+  dbms = "postgresql",
+  user = Sys.getenv("CDM5_POSTGRESQL_USER"),
+  password = URLdecode(Sys.getenv("CDM5_POSTGRESQL_PASSWORD")),
+  server = Sys.getenv("CDM5_POSTGRESQL_SERVER")
+)
+cdmDatabaseSchema <- Sys.getenv("CDM5_POSTGRESQL_CDM_SCHEMA")
+
 test_that("Database Connector Class works", {
-  genericTests(ConnectionHandler, c("ConnectionHandler"), "DatabaseConnectorDbiConnection")
+  genericTests(ConnectionHandler, c("ConnectionHandler"), "DatabaseConnectorDbiConnection", connectionDetails, cdmDatabaseSchema)
 })
 
 test_that("Pooled connector Class works", {
-  genericTests(PooledConnectionHandler, c("PooledConnectionHandler", "ConnectionHandler"), "Pool")
+  genericTests(PooledConnectionHandler, c("PooledConnectionHandler", "ConnectionHandler"), "Pool", connectionDetails, cdmDatabaseSchema)
 })

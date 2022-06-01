@@ -42,27 +42,26 @@ ConnectionHandler <- R6::R6Class(
     #' @description
     #' Base underlying query functionality
     #' Override this in subclass to implement different query method
-    #' @inheritParams   renderTranslateQuerySql
-    queryFunction = function(sql, snakeCaseToCamelCase = self$useCamelCaseColNames) {
-      querySql(private$con, sql, snakeCaseToCamelCase = snakeCaseToCamelCase)
-    },
+    queryFunction = function(sql) {
+      querySql(private$con, sql, snakeCaseToCamelCase = self$snakeCaseToCamelCase)
+    }
   ),
   public = list(
     connectionDetails = NULL,
     tempEmulationSchema = NULL,
     isActive = FALSE,
-    useCamelCaseColNames = TRUE,
+    snakeCaseToCamelCase = TRUE,
     #' @description
     #' initialize connection hander, including initalizing database connection
     #' @param connectionDetails             A DatabaseConnector::connectionDetails instance that can be used to connect to a db
     #' @param tempEmulationSchema           (Optional) Charachter - used by databases (e.g. oracle) that have require a real schema to emulate temporary tables.
     initialize = function(connectionDetails,
                           tempEmulationSchema = getOption("sqlRenderTempEmulationSchema"),
-                          useCamelCaseColNames = TRUE) {
+                          snakeCaseToCamelCase = TRUE) {
       stopifnot("connectionDetails" %in% class(connectionDetails))
       self$connectionDetails <- connectionDetails
       self$tempEmulationSchema <- tempEmulationSchema
-      self$useCamelCaseColNames <- useCamelCaseColNames
+      self$snakeCaseToCamelCase <- snakeCaseToCamelCase
       self$initConnection()
     },
 
@@ -102,11 +101,11 @@ ConnectionHandler <- R6::R6Class(
 
     #' @description
     #' Public method for querying database returns a data.frame of results
-    queryDb = function(sql, snakeCaseToCamelCase = self$useCamelCaseColNames, ...) {
+    queryDb = function(sql, ...) {
       sql <- self$renderTranslateSql(sql, ...)
       tryCatch(
         {
-          data <- self$queryFunction(sql, snakeCaseToCamelCase = snakeCaseToCamelCase)
+          data <- private$queryFunction(sql)
         },
         error = function(error) {
           #' Handles issue where transactions need to be aborted on certain RDBMSes
@@ -137,7 +136,7 @@ ConnectionHandler <- R6::R6Class(
     #' @param packageName               If not null, will use SqlRender to load file from package,
     #'                                  Otherwise file will be loaded directly
     #' @param snakeCaseToCamelCase      convert result headers to camel case or not
-    queryDbFile = function(sqlFilename, packageName = NULL, snakeCaseToCamelCase = self$useCamelCaseColNames, ...) {
+    queryDbFile = function(sqlFilename, packageName = NULL, ...) {
 
       if (!is.null(packageName)) {
         sql <- SqlRender::loadRenderTranslateSql(sqlFilename = sqlFilename,
@@ -150,7 +149,7 @@ ConnectionHandler <- R6::R6Class(
         sql <- SqlRender::readSql(sqlFilename)
         self$renderTranslateSql(sql, ...)
       }
-      private$queryFunction(sql, snakeCaseToCamelCase = snakeCaseToCamelCase)
+      private$queryFunction(sql)
     }
   )
 )
@@ -170,9 +169,9 @@ PooledConnectionHandler <- R6::R6Class(
   private = list(
     #' Underlying query function
     #' @inheritParams  SqlRender::loadRenderTranslateSql
-    queryFunction = function(sql, snakeCaseToCamelCase = self$useCamelCaseColNames) {
+    queryFunction = function(sql) {
       data <- dbGetQuery(private$con, sql)
-      if (snakeCaseToCamelCase) {
+      if (self$useCamelCaseColNames) {
         colnames(data) <- SqlRender::snakeCaseToCamelCase(colnames(data))
       } else {
         colnames(data) <- toupper(colnames(data))
